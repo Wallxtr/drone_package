@@ -23,7 +23,7 @@ class DroneStatusPublisher:
         self.drone_id = idx
 
         # choose topic for DroneStatus
-        topic = f'/drone/status/{self.drone_id}'
+        topic = "/drone/status/{}".format(self.drone_id)
         self.pub = rospy.Publisher(topic, DroneStatusMainMachine, queue_size=10)
         rospy.loginfo("[{}] Publishing DroneStatus on {}".format(self.drone_id,topic))
 
