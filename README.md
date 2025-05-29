@@ -28,33 +28,33 @@ SETUP
         python3-opencv
      pip3 install torch torchvision
 
-   2.  mkdir -p <your_catkin_ws>/src
+2.  mkdir -p <your_catkin_ws>/src
    
-   4.  cd <your_catkin_ws>/src
+3.  cd <your_catkin_ws>/src
    
-   6.  git clone https://github.com/Wallxtr/drone_package.git
+4.  git clone https://github.com/Wallxtr/drone_package.git
       
-   8.  cd ~/<your_catkin_ws>
+5.  cd ~/<your_catkin_ws>
 
-   9.  catkin_make
+6.  catkin_make
    
-   11.  echo "source ~/<your_catkin_ws>/devel/setup.bash" >> ~/.bashrc
+7.  echo "source ~/<your_catkin_ws>/devel/setup.bash" >> ~/.bashrc
    
-   13.  source ~/.bashrc
+8.  source ~/.bashrc
    
-   15.  Inıtialize roscore in one terminal
+9.  Inıtialize roscore in one terminal
    
-   17.  You can use scripts like that:
+11.  You can use scripts like that:
            rosrun drone_package publisher_main_machine.py  _image_dir:=<your_image_directory> 
            rosrun drone_package publisher_drone_machine.py _image_dir:=<your_image_directory> _model_path:=<your_model_path>
            rosrun drone_package subscriber_main_machine.py _save_dir:=<your_save_directory> _model_path:=<your_model_path>
            rosrun drone_package publisher_drone_machine.py _save_dir:=<your_save_directory>
    
-   18. Note that those scripts test two different scenorio:
+12. Note that those scripts test two different scenorio:
        - human detection model running on main machine -> publisher_main_machine.py , subscriber_main_machine.py
        - human detection model running on drone machines -> publisher_drone_machine.py , subscriber_drone_machine.py
 
-   19.  Note that you must only run one subscriber nodes (GCS) but you can run many publisher nodes (drones).
+13.  Note that you must only run one subscriber nodes (GCS) but you can run many publisher nodes (drones).
 
 
    
