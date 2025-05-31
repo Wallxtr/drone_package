@@ -35,10 +35,10 @@ SETUP
    
 10.  Inıtialize roscore in one terminal
    
-11.  You can use scripts like that:
-           rosrun drone_package publisher_main_machine.py  _image_dir:=<your_image_directory> 
-           rosrun drone_package publisher_drone_machine.py _image_dir:=<your_image_directory> _model_path:=<your_model_path>
-           rosrun drone_package subscriber_main_machine.py _save_dir:=<your_save_directory> _model_path:=<your_model_path>
+11.  You can use scripts like that: \
+           rosrun drone_package publisher_main_machine.py  _image_dir:=<your_image_directory> \
+           rosrun drone_package publisher_drone_machine.py _image_dir:=<your_image_directory> _model_path:=<your_model_path> \
+           rosrun drone_package subscriber_main_machine.py _save_dir:=<your_save_directory> _model_path:=<your_model_path> \
            rosrun drone_package publisher_drone_machine.py _save_dir:=<your_save_directory>
    
 12. Note that those scripts test two different scenorio:
