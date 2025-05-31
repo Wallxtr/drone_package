@@ -8,7 +8,6 @@ project(drone_package)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
-  cv_bridge
   geometry_msgs
   message_generation
   rospy
@@ -111,7 +110,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES drone_package
-  CATKIN_DEPENDS cv_bridge geometry_msgs rospy sensor_msgs std_msgs message_runtime
+  CATKIN_DEPENDS geometry_msgs rospy sensor_msgs std_msgs message_runtime
 #  DEPENDS system_lib
 )
 
