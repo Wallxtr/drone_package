@@ -8,7 +8,7 @@ import torch
 import random
 import time
 from geometry_msgs.msg import Point
-from drone_pkg.msg import DroneStatusDroneMachine, Detection
+from drone_package.msg import DroneStatusDroneMachine  #, Detection
 
 
 def allocate_drone_id():
@@ -54,7 +54,7 @@ def main():
         return
 
     # publisher setup
-    pub = rospy.Publisher("/drone/{}/status".format(drone_id), DroneStatusDroneMachine, queue_size=1)
+    pub = rospy.Publisher("/drone/{}/status".format(drone_id), DroneStatusDroneMachine, queue_size=10)
     rate = rospy.Rate(rate_hz)
     idx = 0
 
@@ -77,7 +77,7 @@ def main():
         try:
             inf_start = time.time()
             results = model(img[:, :, ::-1])  # BGR -> RGB
-            df = results.pandas().xyxy[0]
+            #df = results.pandas().xyxy[0]
             inf_end = time.time()
         except Exception as e:
             rospy.logerr("YOLO inference error on {}: {}".format(img_path,e))
@@ -96,6 +96,8 @@ def main():
             random.uniform(-10, 10),
             random.uniform(0, 5),
         )
+        msg.detections = len(results.xyxy[0])
+        """
         msg.detections = []
 
         for _, row in df.iterrows():
@@ -108,10 +110,10 @@ def main():
             msg.detections.append(det)
 
         msg.emergency = bool(len(msg.detections))
-
+        """
         # publish
         pub.publish(msg)
-        rospy.loginfo("Published {} detections from {}".format(len(msg.detections),image_files[idx]))
+        rospy.loginfo("Published {} detections from {}".format(msg.detections,image_files[idx]))
 
         # measure publish rate
         now = time.time()

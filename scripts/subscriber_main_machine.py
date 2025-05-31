@@ -7,7 +7,7 @@ import cv2
 import torch
 import time
 from cv_bridge import CvBridge
-from drone_pkg.msg import DroneStatusMainMachine
+from drone_package.msg import DroneStatusMainMachine
 
 class DynamicDroneYoloSubscriber:
     def __init__(self):
@@ -51,7 +51,7 @@ class DynamicDroneYoloSubscriber:
     def _scan_for_topics(self, event):
         try:
             for topic, ttype in rospy.get_published_topics():
-                if topic.startswith('/drone/status/') and ttype == 'drone_pkg/DroneStatusMainMachine':
+                if topic.startswith('/drone/status/') and ttype == 'drone_package/DroneStatusMainMachine':
                     if topic not in self.subs:
                         rospy.loginfo("Subscribing to {}".format(topic))
                         sub = rospy.Subscriber(topic, DroneStatusMainMachine,

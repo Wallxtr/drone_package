@@ -6,7 +6,7 @@ import rospy
 import cv2
 import time
 from threading import Lock
-from drone_pkg.msg import DroneStatusDroneMachine
+from drone_package.msg import DroneStatusDroneMachine
 from cv_bridge import CvBridge
 
 class SwarmMonitor:
@@ -47,11 +47,10 @@ class SwarmMonitor:
         self.last_status[drone_id] = recv_time
 
         pos = msg.position
-        rospy.loginfo("[%s] pos=(%.1f,%.1f,%.1f) detections=%d emergency=%s" % (
+        rospy.loginfo("[%s] pos=(%.1f,%.1f,%.1f) detections=%d" % (
             drone_id,
             pos.x, pos.y, pos.z,
-            len(msg.detections),
-            msg.emergency
+            msg.detections
         ))
 
 

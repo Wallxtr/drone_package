@@ -5,12 +5,10 @@ import rospy
 import random
 import os
 import time
-
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import Point
 from cv_bridge import CvBridge
-
-from drone_pkg.msg import DroneStatusMainMachine  #  adjust to your package
+from drone_package.msg import DroneStatusMainMachine 
 
 class DroneStatusPublisher:
     def __init__(self):
