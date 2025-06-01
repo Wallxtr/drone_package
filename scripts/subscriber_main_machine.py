@@ -8,10 +8,12 @@ import torch
 import time
 from cv_bridge import CvBridge
 from drone_package.msg import DroneStatusMainMachine
+from ultralytics import YOLO
 
-class DynamicDroneYoloSubscriber:
+
+class SubscriberMainMachine:
     def __init__(self):
-        rospy.init_node('dynamic_drone_yolo_subscriber', anonymous=True)
+        rospy.init_node('subscriber_main_machine', anonymous=True)
 
         # where to save annotated images
         self.save_dir = rospy.get_param('~save_dir', 'output_images')
@@ -22,13 +24,13 @@ class DynamicDroneYoloSubscriber:
         self.model_path = rospy.get_param('~model_path', None)
         self.conf_thres = rospy.get_param('~conf_thres', 0.5)
 
-        # load model
+
+        # Load model
         if self.model_path:
-            self.model = torch.hub.load('ultralytics/yolov5', 'custom',
-                                       path=self.model_path, force_reload=True)
+            self.model = YOLO(self.model_path)  # Custom trained model
         else:
-            self.model = torch.hub.load('ultralytics/yolov5',
-                                       self.model_name, pretrained=True)
+            self.model = YOLO(self.model_name)  # e.g., 'yolov5s.pt', 'yolov8n.pt'
+
         self.model.conf = self.conf_thres
 
         # bridge + bookkeeping
@@ -92,7 +94,7 @@ class DynamicDroneYoloSubscriber:
         # 3) run YOLO and draw boxes
         try:
             results = self.model(img[:, :, ::-1])
-            df = results.pandas().xyxy[0]
+            df = results[0].boxes
             number_detections = len(df)
             """
             for _, row in df.iterrows():
@@ -139,7 +141,7 @@ class DynamicDroneYoloSubscriber:
 
 if __name__ == '__main__':
     try:
-        node = DynamicDroneYoloSubscriber()
+        node = SubscriberMainMachine()
         node.spin()
     except rospy.ROSInterruptException:
         pass

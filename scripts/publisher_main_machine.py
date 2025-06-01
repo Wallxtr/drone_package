@@ -11,10 +11,10 @@ from geometry_msgs.msg import Point
 from cv_bridge import CvBridge
 from drone_package.msg import DroneStatusMainMachine 
 
-class DroneStatusPublisher:
+class PublisherMainMachine:
     def __init__(self):
         # fixed node name so that /publisher_idx is shared
-        rospy.init_node('drone_status_publisher', anonymous=True)
+        rospy.init_node('publisher_main_machine', anonymous=True)
 
         # retrieve and bump the global index
         idx = rospy.get_param('/publisher_idx', 0)
@@ -120,7 +120,7 @@ class DroneStatusPublisher:
 
 if __name__ == '__main__':
     try:
-        node = DroneStatusPublisher()
+        node = PublisherMainMachine()
         node.start()
     except rospy.ROSInterruptException:
         pass

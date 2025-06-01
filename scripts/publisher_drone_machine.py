@@ -9,6 +9,7 @@ import random
 import time
 from geometry_msgs.msg import Point
 from drone_package.msg import DroneStatusDroneMachine  #, Detection
+from ultralytics import YOLO
 
 
 def allocate_drone_id():
@@ -37,12 +38,11 @@ def main():
 
 
 
-    # load YOLO model
+    # Load model
     if model_path:
-        model = torch.hub.load('ultralytics/yolov5', 'custom', path=model_path, force_reload=True)
+        model = YOLO(model_path)  # Custom trained model
     else:
-        model = torch.hub.load('ultralytics/yolov5', model_name, pretrained=True)
-    model.conf = conf_thres
+        model = YOLO(model_name)  # e.g., 'yolov5s.pt', 'yolov8n.pt'
 
     # gather image files
     if not os.path.isdir(image_dir):
@@ -101,7 +101,7 @@ def main():
             random.uniform(-10, 10),
             random.uniform(0, 5),
         )
-        msg.detections = len(results.xyxy[0])
+        msg.detections = len(results[0].boxes)
         """
         msg.detections = []
 

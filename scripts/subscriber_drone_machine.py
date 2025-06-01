@@ -9,9 +9,9 @@ from threading import Lock
 from drone_package.msg import DroneStatusDroneMachine
 from cv_bridge import CvBridge
 
-class SwarmMonitor:
+class SubscriberDroneMachine:
     def __init__(self):
-        rospy.init_node('swarm_monitor')
+        rospy.init_node('subscriber_drone_machine')
         self.bridge = CvBridge()
         self.status_subs = {}
         self.last_status = {}   # drone_id -> last receipt time
@@ -55,6 +55,6 @@ class SwarmMonitor:
 
 
 if __name__ == '__main__':
-    monitor = SwarmMonitor()
+    monitor = SubscriberDroneMachine()
     rospy.spin()
 
