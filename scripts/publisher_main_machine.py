@@ -3,6 +3,7 @@ import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 import rospy
 import random
+import cv2
 import os
 import time
 from sensor_msgs.msg import Image
@@ -19,6 +20,9 @@ class DroneStatusPublisher:
         idx = rospy.get_param('/publisher_idx', 0)
         rospy.set_param('/publisher_idx', idx + 1)
         self.drone_id = idx
+
+        #compression ratio for image
+        self.compression_ratio = rospy.get_param("~compression_ratio", 1)
 
         # choose topic for DroneStatus
         topic = "/drone/status/{}".format(self.drone_id)
@@ -56,7 +60,6 @@ class DroneStatusPublisher:
         self.prev_pub_time = None
 
     def start(self):
-        import cv2
         idx = 0
         while not rospy.is_shutdown():
             # grab next frame
@@ -66,12 +69,22 @@ class DroneStatusPublisher:
                     rospy.logwarn("camera grab failed")
                     continue
                 img = frame
+                h,w = img.shape[:2]
+                new_width = w // self.compression_ratio
+                new_height = h // self.compression_ratio
+                img = cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_AREA)
             else:
                 path = os.path.join(self.image_dir, self.files[idx])
+
                 img = cv2.imread(path)
                 if img is None:
                     rospy.logwarn("load failed: {}".format(path))
-                idx = (idx + 1) % len(self.files)
+                h,w = img.shape[:2]
+                new_width = w // self.compression_ratio
+                new_height = h // self.compression_ratio
+                img = cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_AREA)
+
+                idx = (idx + 1) % len(self.files)   # overpass files recursively
 
             # build Image msg
             img_msg = self.bridge.cv2_to_imgmsg(img, encoding='bgr8')
@@ -79,14 +92,14 @@ class DroneStatusPublisher:
 
             # build DroneStatus
             status = DroneStatusMainMachine(
-                header=img_msg.header,
-                drone_id=self.drone_id,
-                position=Point(
+                header=img_msg.header,  # header msg
+                drone_id=self.drone_id,  # drone index
+                position=Point(     # drone position
                     x=random.uniform(-10,10),
                     y=random.uniform(-10,10),
                     z=random.uniform(0,5)
                 ),
-                image=img_msg
+                image=img_msg   # image 
             )
 
             # publish and measure rate

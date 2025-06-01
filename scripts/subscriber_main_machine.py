@@ -80,15 +80,7 @@ class DynamicDroneYoloSubscriber:
         # 1) log header, drone_id, position
         hdr = msg.header
         pos = msg.position
-        rospy.loginfo(
-            "[%s] seq=%d stamp=%.3f frame_id=%s | drone_id=%d | pos=(%.2f, %.2f, %.2f)",
-            topic,
-            hdr.seq,
-            hdr.stamp.to_sec(),
-            hdr.frame_id,
-            msg.drone_id,
-            pos.x, pos.y, pos.z
-        )
+        
 
         # 2) convert ROS Image to CV2
         try:
@@ -101,6 +93,8 @@ class DynamicDroneYoloSubscriber:
         try:
             results = self.model(img[:, :, ::-1])
             df = results.pandas().xyxy[0]
+            number_detections = len(df)
+            """
             for _, row in df.iterrows():
                 x1, y1 = int(row.xmin), int(row.ymin)
                 x2, y2 = int(row.xmax), int(row.ymax)
@@ -111,9 +105,20 @@ class DynamicDroneYoloSubscriber:
                             (x1, y1-5),
                             cv2.FONT_HERSHEY_SIMPLEX,
                             0.5, (0,255,0), 2)
+            """
         except Exception as e:
             rospy.logerr("[{}] Detection error: {}".format(topic,e))
-
+        
+        rospy.loginfo(
+            "[%s] seq=%d stamp=%.3f frame_id=%s | drone_id=%d | pos=(%.2f, %.2f, %.2f) | detection=%d",
+            topic,
+            hdr.seq,
+            hdr.stamp.to_sec(),
+            hdr.frame_id,
+            msg.drone_id,
+            pos.x, pos.y, pos.z,
+            number_detections
+        )
         # end processing timer
         proc_end = time.time()
         processing_time = (proc_end - proc_start) * 1000
@@ -121,10 +126,10 @@ class DynamicDroneYoloSubscriber:
 
         # 4) save annotated image
         idx   = self.counters[topic]
-        name  = topic.strip('/').replace('/', '_') + "_det_{:04d}.png".format(idx)
-        path  = os.path.join(self.save_dir, name)
-        cv2.imwrite(path, img)
-        rospy.loginfo("[{}] Saved annotated image -> {}".format(topic,path))
+        #name  = topic.strip('/').replace('/', '_') + "_det_{:04d}.png".format(idx)
+        #path  = os.path.join(self.save_dir, name)
+        #cv2.imwrite(path, img)
+        #rospy.loginfo("[{}] Saved annotated image -> {}".format(topic,path))
         self.counters[topic] += 1
 
 

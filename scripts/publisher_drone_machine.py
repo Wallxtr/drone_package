@@ -33,6 +33,7 @@ def main():
     model_path = rospy.get_param('~model_path', None)
     conf_thres = rospy.get_param('~conf_thres', 0.5)
     rate_hz    = rospy.get_param('~rate', 1.0)
+    compression_ratio = rospy.get_param("~compression_ratio", 1)
 
 
 
@@ -72,6 +73,10 @@ def main():
             idx = (idx + 1) % len(image_files)
             rate.sleep()
             continue
+        h,w = img.shape[:2]
+        new_width = w // compression_ratio
+        new_height = h // compression_ratio
+        img = cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_AREA)
 
         # run inference
         try:
