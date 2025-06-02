@@ -54,6 +54,7 @@ find_package(catkin REQUIRED COMPONENTS
    Detection.msg
    DroneStatusDroneMachine.msg
    DroneStatusMainMachine.msg
+   WayPoint.msg
  )
 
 ## Generate services in the 'srv' folder

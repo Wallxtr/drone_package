@@ -1,15 +1,20 @@
 #!/usr/bin/env python
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
+import random
 import rospy
 import time
-from drone_package.msg import DroneStatusDroneMachine
+from geometry_msgs.msg import Point
+from drone_package.msg import DroneStatusDroneMachine,WayPoint
 
 class SubscriberDroneMachine:
     def __init__(self):
         rospy.init_node('subscriber_drone_machine')
         self.last_status = {}   # drone_id -> last receipt time
 
+
+
+        self.pub = rospy.Publisher("/drone_waypoint_drone_machine/waypoint", WayPoint, queue_size=10)
         topic = "/drone_status_drone_machine/status"
         sub = rospy.Subscriber(topic, DroneStatusDroneMachine, self.status_cb,)
 
@@ -33,6 +38,29 @@ class SubscriberDroneMachine:
             pos.x, pos.y, pos.z,
             msg.detections
         ))
+
+        # Publish WayPoint.msg
+        wp_msg = WayPoint()
+        wp_msg.header.stamp = rospy.Time.now()
+        wp_msg.header.frame_id = msg.header.frame_id
+        wp_msg.header.seq = msg.header.seq
+
+        wp_msg.drone_id = msg.drone_id
+        if (msg.detections > 5):
+            wp_msg.action = "hover"
+            wp_msg.position = msg.position
+        elif (msg.detections > 0):
+            wp_msg.action = "wander"
+            wp_msg.position = Point(msg.position.x + random.uniform(-1,1),msg.position.y + random.uniform(-1,1),msg.position.z)
+        else:
+            wp_msg.action = "go"
+            wp_msg.position = Point(x=random.uniform(-10,10),y=random.uniform(-10,10),z=random.uniform(0,5))
+
+
+        rospy.loginfo("Published WayPoint for drone %d with label: %s", wp_msg.drone_id, wp_msg.action)
+
+        self.pub.publish(wp_msg)
+
 
     def spin(self):
         rospy.spin()

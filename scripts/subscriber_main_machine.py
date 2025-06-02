@@ -3,8 +3,10 @@ import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 import rospy
 import time
+import random
 from cv_bridge import CvBridge
-from drone_package.msg import DroneStatusMainMachine
+from drone_package.msg import DroneStatusMainMachine, WayPoint
+from geometry_msgs.msg import Point
 from ultralytics import YOLO
 
 
@@ -14,7 +16,7 @@ class SubscriberMainMachine:
 
 
         # YOLO model params
-        self.model_name = rospy.get_param('~model_name', 'yolov5s')
+        self.model_name = rospy.get_param('~model_name', 'yolov8n.pt')
         self.model_path = rospy.get_param('~model_path', None)
         self.conf_thres = rospy.get_param('~conf_thres', 0.5)
 
@@ -31,10 +33,14 @@ class SubscriberMainMachine:
         # metrics bookkeeping
         self.last_arrival = {}           # topic -> timestamp of last frame
 
+        # Set up publisher for WayPoint.msg
+        self.pub = rospy.Publisher("/drone_waypoint_main_machine/waypoint", WayPoint, queue_size=10)
+
         sub = rospy.Subscriber("/drone_status_main_machine/status", DroneStatusMainMachine,self._callback)
 
         rospy.loginfo("SubscriberMainMachine initialized; scanning for /drone_status_main_machine/status")
 
+        
 
 
 
@@ -84,6 +90,29 @@ class SubscriberMainMachine:
             pos.x, pos.y, pos.z,
             number_detections
         )
+
+        # Publish WayPoint.msg
+        wp_msg = WayPoint()
+        wp_msg.header.stamp = rospy.Time.now()
+        wp_msg.header.frame_id = msg.header.frame_id
+        wp_msg.header.seq = msg.header.seq
+        
+        wp_msg.drone_id = msg.drone_id
+        if (number_detections > 5):
+            wp_msg.action = "hover"
+            wp_msg.position = msg.position
+        elif (number_detections > 0):
+            wp_msg.action = "wander"
+            wp_msg.position = Point(msg.position.x + random.uniform(-1,1),msg.position.y + random.uniform(-1,1),msg.position.z)
+        else:
+            wp_msg.action = "go"
+            wp_msg.position = Point(x=random.uniform(-10,10),y=random.uniform(-10,10),z=random.uniform(0,5))
+
+
+        rospy.loginfo("Published WayPoint for drone %d with label: %s", wp_msg.drone_id, wp_msg.action)
+
+        self.pub.publish(wp_msg)
+
         # end processing timer
         proc_end = time.time()
         processing_time = (proc_end - proc_start) * 1000

@@ -7,7 +7,7 @@ import cv2
 import random
 import time
 from geometry_msgs.msg import Point
-from drone_package.msg import DroneStatusDroneMachine  #, Detection
+from drone_package.msg import DroneStatusDroneMachine,WayPoint
 from ultralytics import YOLO
 
 
@@ -16,8 +16,10 @@ class PublisherDroneMachine:
         # Initialize ROS node
         rospy.init_node('publisher_drone_machine', anonymous=True)
 
-        # Allocate drone ID
+        # Drone Features
         self.drone_id = self.allocate_drone_id()
+        self.position = Point(x=random.uniform(-10,10),y=random.uniform(-10,10),z=random.uniform(0,5))
+        self.action = "go"
 
         # Load parameters
         self.image_dir = rospy.get_param('~image_dir', '/path/to/images')
@@ -32,7 +34,7 @@ class PublisherDroneMachine:
         self.pub = rospy.Publisher(topic_name, DroneStatusDroneMachine, queue_size=10)
         self.rate = rospy.Rate(self.rate_hz)
 
-
+        
         # Load model
         self.model = YOLO(self.model_path if self.model_path else self.model_name)
         self.model.conf = self.conf_thres
@@ -51,10 +53,14 @@ class PublisherDroneMachine:
 
         
 
-        rospy.loginfo(f"Starting YOLO publisher for drone {self.drone_id} with {len(self.image_files)} images at {self.rate_hz} Hz")
+        rospy.loginfo("Starting YOLO publisher for drone {} with {} images at {} Hz".format(self.drone_id,len(self.image_files),self.rate_hz))
 
         self.image_idx = 0
         self.prev_pub_time = None
+
+
+        #Waypoint Subscriber
+        waypoint_sub =  rospy.Subscriber("/drone_waypoint_drone_machine/waypoint", WayPoint, self.waypoint_callback)
 
 
     def allocate_drone_id(self):
@@ -76,14 +82,14 @@ class PublisherDroneMachine:
         self.image_idx = (self.image_idx + 1) % len(self.image_files)
 
 
-    def run(self):
+    def start(self):
         while not rospy.is_shutdown():
             start_time = time.time()
             img_path = os.path.join(self.image_dir, self.image_files[self.image_idx])
             img = self.load_image(img_path)
 
             if img is None:
-                rospy.logerr(f"Failed to load image: {img_path}")
+                rospy.logerr("Failed to load image: {}".format(img_path))
                 self.advance_index()
                 self.rate.sleep()
                 continue
@@ -91,7 +97,7 @@ class PublisherDroneMachine:
             try:
                 results = self.model(img[:, :, ::-1])  # BGR -> RGB
             except Exception as e:
-                rospy.logerr(f"YOLO inference error on {img_path}: {e}")
+                rospy.logerr("YOLO inference error on {}: {}".format(img_path,e))
                 self.advance_index()
                 self.rate.sleep()
                 continue
@@ -99,33 +105,40 @@ class PublisherDroneMachine:
             # Build and publish message
             msg = DroneStatusDroneMachine()
             msg.header.stamp = rospy.Time.now()
+            msg.header.frame_id = str(self.image_idx)
             msg.drone_id = self.drone_id
-            msg.position = Point(
-                random.uniform(-10, 10),
-                random.uniform(-10, 10),
-                random.uniform(0, 5),
-            )
+            msg.position = self.position
             msg.detections = len(results[0].boxes)
 
             self.pub.publish(msg)
-            rospy.loginfo(f"Published {msg.detections} detections from {self.image_files[self.image_idx]}")
+            rospy.loginfo("Published {} detections from {}".format(msg.detections,self.image_files[self.image_idx]))
 
             # Print FPS info
             now = time.time()
             if self.prev_pub_time:
                 fps = 1.0 / (now - self.prev_pub_time) if (now - self.prev_pub_time) > 0 else float('inf')
                 proc_time = (now - start_time) * 1000
-                rospy.loginfo(f"[drone {self.drone_id}] Publish rate: {fps:.2f} fps, Processing Time: {proc_time:.1f} ms")
+                rospy.loginfo("[drone {}] Publish rate: {:.2f} fps, Processing Time: {:.1f} ms".format(self.drone_id,fps,proc_time))
             self.prev_pub_time = now
 
             self.advance_index()
             self.rate.sleep()
 
+
+    def waypoint_callback(self, msg):
+        if msg.drone_id == self.drone_id:
+            rospy.loginfo(
+                "[{}] Received WayPoint for this drone: (x={:.2f}, y={:.2f}, z={:.2f}) | Action: {}".format(
+                    self.drone_id, msg.position.x, msg.position.y, msg.position.z, msg.action))     
+            self.position = msg.position
+            self.action = msg.action
+
+
 if __name__ == '__main__':
     try:
         drone_publisher = PublisherDroneMachine()
-        drone_publisher.run()
+        drone_publisher.start()
     except rospy.ROSInterruptException:
         pass
     except Exception as e:
-        rospy.logfatal(f"DronePublisher failed to start: {e}")
+        rospy.logfatal("DronePublisher failed to start: {}".format(e))

@@ -9,14 +9,19 @@ import time
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import Point
 from cv_bridge import CvBridge
-from drone_package.msg import DroneStatusMainMachine 
+from drone_package.msg import DroneStatusMainMachine, WayPoint
+
 
 class PublisherMainMachine:
     def __init__(self):
+
         # fixed node name so that /publisher_idx is shared
         rospy.init_node('publisher_main_machine', anonymous=True)
 
+        # Drone Features
         self.drone_id = self.allocate_drone_id()
+        self.position = Point(x=random.uniform(-10,10),y=random.uniform(-10,10),z=random.uniform(0,5))
+        self.action = "go"
 
         #rospy parameters
         self.compression_ratio = rospy.get_param("~compression_ratio", 1)
@@ -50,6 +55,9 @@ class PublisherMainMachine:
         # metric: track last publish time
         self.prev_pub_time = None
 
+        #Waypoint subscriber
+        waypoint_sub =  rospy.Subscriber("/drone_waypoint_main_machine/waypoint", WayPoint, self.waypoint_callback)
+
     def allocate_drone_id(self):
         if not rospy.has_param("/main_machine_drone_index"):
             rospy.set_param("/main_machine_drone_index", 1)
@@ -76,22 +84,16 @@ class PublisherMainMachine:
             self.advance_index()  # overpass files for loop  !! IMPORTANT FOR LOOP
 
 
-
-
-
             # build Image msg
             img_msg = self.bridge.cv2_to_imgmsg(img, encoding='bgr8')
             img_msg.header.stamp = rospy.Time.now()
+            img_msg.header.frame_id = str(self.image_idx)
 
             # build DroneStatus
             status = DroneStatusMainMachine(
                 header=img_msg.header,  # header msg
                 drone_id=self.drone_id,  # drone index
-                position=Point(     # drone position
-                    x=random.uniform(-10,10),
-                    y=random.uniform(-10,10),
-                    z=random.uniform(0,5)
-                ),
+                position=self.position, # drone position
                 image=img_msg   # image 
             )
 
@@ -103,10 +105,16 @@ class PublisherMainMachine:
                 fps = 1.0 / interval if interval > 0 else float('inf')
                 rospy.loginfo("[{}] Video rate: {:.2f} fps".format(self.drone_id,fps))
             self.prev_pub_time = now
-
             self.rate.sleep()
 
-
+    def waypoint_callback(self, msg):
+        if msg.drone_id == self.drone_id:
+            rospy.loginfo(
+                "[{}] Received WayPoint for this drone: (x={:.2f}, y={:.2f}, z={:.2f}) | Action: {}".format(
+                    self.drone_id, msg.position.x, msg.position.y, msg.position.z, msg.action))
+            self.position = msg.position
+            self.action = msg.action
+            
 
 if __name__ == '__main__':
     try:
