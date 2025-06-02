@@ -1,11 +1,9 @@
 #!/usr/bin/env python
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
-
 import rospy
 import os
 import cv2
-import torch
 import random
 import time
 from geometry_msgs.msg import Point
@@ -29,8 +27,16 @@ class PublisherDroneMachine:
         self.rate_hz = rospy.get_param('~rate', 1.0)
         self.compression_ratio = rospy.get_param("~compression_ratio", 1)
 
+        # Setup publisher
+        topic_name = "/drone_status_drone_machine/status"
+        self.pub = rospy.Publisher(topic_name, DroneStatusDroneMachine, queue_size=10)
+        self.rate = rospy.Rate(self.rate_hz)
+
+
         # Load model
         self.model = YOLO(self.model_path if self.model_path else self.model_name)
+        self.model.conf = self.conf_thres
+
 
         # Prepare images
         if not os.path.isdir(self.image_dir):
@@ -43,22 +49,21 @@ class PublisherDroneMachine:
             rospy.logfatal("No images found in directory: {}".format(self.image_dir))
             raise FileNotFoundError("No images in {}".format(self.image_dir))
 
-        # Setup publisher
-        topic_name = f"/drone/{self.drone_id}/status"
-        self.publisher = rospy.Publisher(topic_name, DroneStatusDroneMachine, queue_size=10)
-        self.rate = rospy.Rate(self.rate_hz)
+        
 
         rospy.loginfo(f"Starting YOLO publisher for drone {self.drone_id} with {len(self.image_files)} images at {self.rate_hz} Hz")
 
-        self.idx = 0
+        self.image_idx = 0
         self.prev_pub_time = None
 
+
     def allocate_drone_id(self):
-        if not rospy.has_param("/next_drone_index"):
-            rospy.set_param("/next_drone_index", 1)
-        idx = rospy.get_param("/next_drone_index")
-        rospy.set_param("/next_drone_index", idx + 1)
+        if not rospy.has_param("/drone_machine_drone_index"):
+            rospy.set_param("/drone_machine_drone_index", 1)
+        idx = rospy.get_param("/drone_machine_drone_index")
+        rospy.set_param("/drone_machine_drone_index", idx + 1)
         return idx
+
 
     def load_image(self, path):
         img = cv2.imread(path)
@@ -66,11 +71,15 @@ class PublisherDroneMachine:
             h, w = img.shape[:2]
             img = cv2.resize(img, (w // self.compression_ratio, h // self.compression_ratio), interpolation=cv2.INTER_AREA)
         return img
+    
+    def advance_index(self):
+        self.image_idx = (self.image_idx + 1) % len(self.image_files)
+
 
     def run(self):
         while not rospy.is_shutdown():
             start_time = time.time()
-            img_path = os.path.join(self.image_dir, self.image_files[self.idx])
+            img_path = os.path.join(self.image_dir, self.image_files[self.image_idx])
             img = self.load_image(img_path)
 
             if img is None:
@@ -98,8 +107,8 @@ class PublisherDroneMachine:
             )
             msg.detections = len(results[0].boxes)
 
-            self.publisher.publish(msg)
-            rospy.loginfo(f"Published {msg.detections} detections from {self.image_files[self.idx]}")
+            self.pub.publish(msg)
+            rospy.loginfo(f"Published {msg.detections} detections from {self.image_files[self.image_idx]}")
 
             # Print FPS info
             now = time.time()
@@ -111,10 +120,6 @@ class PublisherDroneMachine:
 
             self.advance_index()
             self.rate.sleep()
-
-    def advance_index(self):
-        self.idx = (self.idx + 1) % len(self.image_files)
-
 
 if __name__ == '__main__':
     try:

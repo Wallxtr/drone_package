@@ -2,9 +2,6 @@
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 import rospy
-import os
-import cv2
-import torch
 import time
 from cv_bridge import CvBridge
 from drone_package.msg import DroneStatusMainMachine
@@ -15,9 +12,6 @@ class SubscriberMainMachine:
     def __init__(self):
         rospy.init_node('subscriber_main_machine', anonymous=True)
 
-        # where to save annotated images
-        self.save_dir = rospy.get_param('~save_dir', 'output_images')
-        os.makedirs(self.save_dir, exist_ok=True)
 
         # YOLO model params
         self.model_name = rospy.get_param('~model_name', 'yolov5s')
@@ -26,56 +20,38 @@ class SubscriberMainMachine:
 
 
         # Load model
-        if self.model_path:
-            self.model = YOLO(self.model_path)  # Custom trained model
-        else:
-            self.model = YOLO(self.model_name)  # e.g., 'yolov5s.pt', 'yolov8n.pt'
+        self.model = YOLO(self.model_path if self.model_path else self.model_name)
 
         self.model.conf = self.conf_thres
 
-        # bridge + bookkeeping
+        # bridge initialize
         self.bridge   = CvBridge()
-        self.subs     = {}    
-        self.counters = {}    
+
 
         # metrics bookkeeping
         self.last_arrival = {}           # topic -> timestamp of last frame
 
+        sub = rospy.Subscriber("/drone_status_main_machine/status", DroneStatusMainMachine,self._callback)
 
-        # timer to scan for new DroneStatus topics
-        scan_hz = rospy.get_param('~scan_rate', 1.0)
-        self.timer = rospy.Timer(rospy.Duration(1.0/scan_hz),
-                                 self._scan_for_topics)
-
-        rospy.loginfo("DynamicDroneYoloSubscriber initialized; scanning for /drone/status/*")
+        rospy.loginfo("SubscriberMainMachine initialized; scanning for /drone_status_main_machine/status")
 
 
-    def _scan_for_topics(self, event):
-        try:
-            for topic, ttype in rospy.get_published_topics():
-                if topic.startswith('/drone/status/') and ttype == 'drone_package/DroneStatusMainMachine':
-                    if topic not in self.subs:
-                        rospy.loginfo("Subscribing to {}".format(topic))
-                        sub = rospy.Subscriber(topic, DroneStatusMainMachine,
-                                               self._callback,
-                                               callback_args=topic)
-                        self.subs[topic]     = sub
-                        self.counters[topic] = 0
-        except Exception as e:
-            rospy.logerr("Scan error: {}".format(e))
 
-    def _callback(self, msg, topic):
+
+    def _callback(self, msg):
         # capture arrival time
         recv_time = time.time()
         # transmission delay (ms)
         tx_delay = (recv_time - msg.header.stamp.to_sec()) * 1000
         # video rate (fps)
+        """
+        
         if topic in self.last_arrival:
             dt = recv_time - self.last_arrival[topic]
             fps = 1.0 / dt if dt > 0 else float('inf')
             rospy.loginfo("[{}] Video rate: {:.2f} fps".format(topic,fps))
         self.last_arrival[topic] = recv_time
-
+        """
         # start processing timer
         proc_start = time.time()
 
@@ -88,32 +64,19 @@ class SubscriberMainMachine:
         try:
             img = self.bridge.imgmsg_to_cv2(msg.image, desired_encoding='bgr8')
         except Exception as e:
-            rospy.logerr("[{}] CV convert error: {}".format(topic,e))
+            rospy.logerr(" CV convert error: {}".format(e))
             return
 
-        # 3) run YOLO and draw boxes
+        # 3) run YOLO
         try:
-            results = self.model(img[:, :, ::-1])
+            results = self.model(img[:, :, ::-1],verbose=False)
             df = results[0].boxes
             number_detections = len(df)
-            """
-            for _, row in df.iterrows():
-                x1, y1 = int(row.xmin), int(row.ymin)
-                x2, y2 = int(row.xmax), int(row.ymax)
-                conf   = row.confidence
-                label  = row.name
-                cv2.rectangle(img, (x1, y1), (x2, y2), (0,255,0), 2)
-                cv2.putText(img, "{} {:.2f}".format(label,conf),
-                            (x1, y1-5),
-                            cv2.FONT_HERSHEY_SIMPLEX,
-                            0.5, (0,255,0), 2)
-            """
         except Exception as e:
-            rospy.logerr("[{}] Detection error: {}".format(topic,e))
+            rospy.logerr(" Detection error: {}".format(e))
         
         rospy.loginfo(
-            "[%s] seq=%d stamp=%.3f frame_id=%s | drone_id=%d | pos=(%.2f, %.2f, %.2f) | detection=%d",
-            topic,
+            " seq=%d stamp=%.3f frame_id=%s | drone_id=%d | pos=(%.2f, %.2f, %.2f) | detection=%d",
             hdr.seq,
             hdr.stamp.to_sec(),
             hdr.frame_id,
@@ -124,15 +87,8 @@ class SubscriberMainMachine:
         # end processing timer
         proc_end = time.time()
         processing_time = (proc_end - proc_start) * 1000
-        rospy.loginfo("[{}] Processing time: {:.1f} ms; Transmission delay: {:.1f} ms".format(topic,processing_time,tx_delay))
+        rospy.loginfo(" Processing time: {:.1f} ms; Transmission delay: {:.1f} ms".format(processing_time,tx_delay))
 
-        # 4) save annotated image
-        idx   = self.counters[topic]
-        #name  = topic.strip('/').replace('/', '_') + "_det_{:04d}.png".format(idx)
-        #path  = os.path.join(self.save_dir, name)
-        #cv2.imwrite(path, img)
-        #rospy.loginfo("[{}] Saved annotated image -> {}".format(topic,path))
-        self.counters[topic] += 1
 
 
 

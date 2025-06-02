@@ -16,75 +16,68 @@ class PublisherMainMachine:
         # fixed node name so that /publisher_idx is shared
         rospy.init_node('publisher_main_machine', anonymous=True)
 
-        # retrieve and bump the global index
-        idx = rospy.get_param('/publisher_idx', 0)
-        rospy.set_param('/publisher_idx', idx + 1)
-        self.drone_id = idx
+        self.drone_id = self.allocate_drone_id()
 
-        #compression ratio for image
+        #rospy parameters
         self.compression_ratio = rospy.get_param("~compression_ratio", 1)
+        self.image_dir = rospy.get_param('~image_dir', 'images')
+        self.rate_hz = rospy.get_param('~rate', 1)
 
         # choose topic for DroneStatus
-        topic = "/drone/status/{}".format(self.drone_id)
+        topic = "/drone_status_main_machine/status"
         self.pub = rospy.Publisher(topic, DroneStatusMainMachine, queue_size=10)
         rospy.loginfo("[{}] Publishing DroneStatus on {}".format(self.drone_id,topic))
 
         # image source (camera or folder)
         self.bridge = CvBridge()
-        self.use_camera = rospy.get_param('~use_camera', False)
-        if self.use_camera:
-            import cv2
-            self.cap = cv2.VideoCapture(0)
-            if not self.cap.isOpened():
-                rospy.logerr("Camera init failed")
-                rospy.signal_shutdown("camera")
-        else:
-            self.image_dir = rospy.get_param('~image_dir', 'images')
-            if not os.path.isdir(self.image_dir):
-                rospy.logerr("Bad image_dir: {}".format(self.image_dir))
-                rospy.signal_shutdown("image_dir")
-            self.files = sorted([
-                f for f in os.listdir(self.image_dir)
-                if f.lower().endswith(('.png','.jpg','.jpeg'))
-            ])
-            if not self.files:
-                rospy.logerr("No images found")
-                rospy.signal_shutdown("images")
+        self.image_idx = 0
+        
+        if not os.path.isdir(self.image_dir):
+            rospy.logerr("Bad image_dir: {}".format(self.image_dir))
+            rospy.signal_shutdown("image_dir")
+        self.image_files = sorted([
+            f for f in os.listdir(self.image_dir)
+            if f.lower().endswith(('.png','.jpg','.jpeg'))
+        ])
+        if not self.image_files:
+            rospy.logerr("No images found")
+            rospy.signal_shutdown("images")
 
         # publish rate
-        rate_hz = rospy.get_param('~rate', 1)
-        self.rate = rospy.Rate(rate_hz)
-        rospy.loginfo("Publishing at {} Hz".format(rate_hz))
+        self.rate = rospy.Rate(self.rate_hz)
+        #rospy.loginfo("Publishing at {} Hz".format(self.rate_hz))
 
         # metric: track last publish time
         self.prev_pub_time = None
 
+    def allocate_drone_id(self):
+        if not rospy.has_param("/main_machine_drone_index"):
+            rospy.set_param("/main_machine_drone_index", 1)
+        idx = rospy.get_param("/main_machine_drone_index")
+        rospy.set_param("/main_machine_drone_index", idx + 1)
+        return idx
+
+    def load_image(self, path):
+        img = cv2.imread(path)
+        if img is not None and self.compression_ratio > 1:
+            h, w = img.shape[:2]
+            img = cv2.resize(img, (w // self.compression_ratio, h // self.compression_ratio), interpolation=cv2.INTER_AREA)
+        return img
+
+    def advance_index(self):
+        self.image_idx = (self.image_idx + 1) % len(self.image_files)
+
+
     def start(self):
-        idx = 0
         while not rospy.is_shutdown():
-            # grab next frame
-            if self.use_camera:
-                ret, frame = self.cap.read()
-                if not ret:
-                    rospy.logwarn("camera grab failed")
-                    continue
-                img = frame
-                h,w = img.shape[:2]
-                new_width = w // self.compression_ratio
-                new_height = h // self.compression_ratio
-                img = cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_AREA)
-            else:
-                path = os.path.join(self.image_dir, self.files[idx])
 
-                img = cv2.imread(path)
-                if img is None:
-                    rospy.logwarn("load failed: {}".format(path))
-                h,w = img.shape[:2]
-                new_width = w // self.compression_ratio
-                new_height = h // self.compression_ratio
-                img = cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_AREA)
+            path = os.path.join(self.image_dir, self.image_files[self.image_idx])
+            img = self.load_image(path)
+            self.advance_index()  # overpass files for loop  !! IMPORTANT FOR LOOP
 
-                idx = (idx + 1) % len(self.files)   # overpass files recursively
+
+
+
 
             # build Image msg
             img_msg = self.bridge.cv2_to_imgmsg(img, encoding='bgr8')
@@ -113,9 +106,6 @@ class PublisherMainMachine:
 
             self.rate.sleep()
 
-    def __del__(self):
-        if self.use_camera and hasattr(self, 'cap'):
-            self.cap.release()
 
 
 if __name__ == '__main__':
