@@ -22,13 +22,19 @@ class PublisherMainMachine:
         # fixed node name so that /publisher_idx is shared
         rospy.init_node('publisher_main_machine', anonymous=True)
 
+        #rospy parameters
+        self.compression_ratio = rospy.get_param("~compression_ratio", 1)
+        self.image_dir = rospy.get_param('~image_dir', 'images')
+        self.rate_hz = rospy.get_param('~rate', 1)
+
+
         # Create log directory
         log_dir = os.path.expanduser("~/logs/publisher_main_machine")
         os.makedirs(log_dir, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-        self.status_log_path = os.path.join(log_dir, f"status_log_{timestamp}.txt")
-        self.waypoint_log_path = os.path.join(log_dir, f"waypoint_log_{timestamp}.txt")
+        self.status_log_path = os.path.join(log_dir, f"status_log_{timestamp}_{self.compression_ratio}_{self.image_dir}.txt")
+        self.waypoint_log_path = os.path.join(log_dir, f"waypoint_log_{timestamp}_{self.compression_ratio}_{self.image_dir}.txt")
 
         self.status_log_file = open(self.status_log_path, 'a')
         self.waypoint_log_file = open(self.waypoint_log_path, 'a')
@@ -42,10 +48,7 @@ class PublisherMainMachine:
         self.position = Point(x=random.uniform(-10,10),y=random.uniform(-10,10),z=random.uniform(0,5))
         self.action = "go"
 
-        #rospy parameters
-        self.compression_ratio = rospy.get_param("~compression_ratio", 1)
-        self.image_dir = rospy.get_param('~image_dir', 'images')
-        self.rate_hz = rospy.get_param('~rate', 1)
+        
 
         # choose topic for DroneStatus
         topic = "/drone_status_main_machine/status"
@@ -86,7 +89,7 @@ class PublisherMainMachine:
 
     def load_image(self, path):
         img = cv2.imread(path)
-        if img is not None and self.compression_ratio > 1:
+        if (img is not None) and (self.compression_ratio > 1):
             h, w = img.shape[:2]
             img = cv2.resize(img, (w // self.compression_ratio, h // self.compression_ratio), interpolation=cv2.INTER_AREA)
         return img
@@ -100,6 +103,7 @@ class PublisherMainMachine:
             msg_publisher_time_start = time.time()
             path = os.path.join(self.image_dir, self.image_files[self.image_idx])
             img = self.load_image(path)
+            print(img.shape)
             
 
 

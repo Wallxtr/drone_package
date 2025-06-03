@@ -18,7 +18,11 @@ class SubscriberMainMachine:
     def __init__(self):
         rospy.init_node('subscriber_main_machine', anonymous=True)
         
-
+        # YOLO model params
+        self.model_name = rospy.get_param('~model_name', 'yolov8n.pt')
+        self.model_path = rospy.get_param('~model_path', None)
+        self.conf_thres = rospy.get_param('~conf_thres', 0.5)
+        
         # Create log directory
         log_dir = os.path.expanduser("~/logs/subscriber_main_machine")
         os.makedirs(log_dir, exist_ok=True)
@@ -36,10 +40,7 @@ class SubscriberMainMachine:
         self.tx_delay = None
 
 
-        # YOLO model params
-        self.model_name = rospy.get_param('~model_name', 'yolov8n.pt')
-        self.model_path = rospy.get_param('~model_path', None)
-        self.conf_thres = rospy.get_param('~conf_thres', 0.5)
+
 
 
         # Load model
