@@ -48,4 +48,7 @@ SETUP
 13.  Note that you must only run one subscriber nodes (GCS) but you can run many publisher nodes (drones).
 
 
+https://drive.google.com/file/d/1olVUYrBQqAPlFNVECSj0CH1X4uZYdTok/view?usp=sharing
+
+
    
