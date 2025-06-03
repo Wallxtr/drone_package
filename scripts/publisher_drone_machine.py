@@ -1,6 +1,10 @@
 #!/usr/bin/env python
+# test result information for status msg --> msg_type, time,seq , drone_id , frame_id ,status_publisher_time , processing_time
+# test result information for waypoint msg --> msg_type, time, seq, drone_id, frame_id, waypoint_position, action , waypoint_transmission_time
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
+from datetime import datetime
+import os
 import rospy
 import os
 import cv2
@@ -15,6 +19,18 @@ class PublisherDroneMachine:
     def __init__(self):
         # Initialize ROS node
         rospy.init_node('publisher_drone_machine', anonymous=True)
+
+
+        # Create log directory
+        log_dir = os.path.expanduser("~/logs/publisher_drone_machine")
+        os.makedirs(log_dir, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        self.status_log_path = os.path.join(log_dir, f"status_log_{timestamp}.txt")
+        self.waypoint_log_path = os.path.join(log_dir, f"waypoint_log_{timestamp}.txt")
+
+        self.status_log_file = open(self.status_log_path, 'a')
+        self.waypoint_log_file = open(self.waypoint_log_path, 'a')
 
         #Time attributes
         self.processing_time = None
@@ -128,11 +144,17 @@ class PublisherDroneMachine:
 
             # Print FPS info
             now = time.time()
+            self.msg_publisher_time = ((now - start_time) * 1000 )- self.processing_time  # substract yolo model time
             if self.prev_pub_time:
                 fps = 1.0 / (now - self.prev_pub_time) if (now - self.prev_pub_time) > 0 else float('inf')
-                self.msg_publisher_time = ((now - start_time) * 1000 )- self.processing_time  # substract yolo model time
                 rospy.loginfo("[drone {}] Publish rate: {:.2f} fps, Processing Time: {:.1f} ms".format(self.drone_id,fps,self.msg_publisher_time))
             self.prev_pub_time = now
+
+            # test result information for status msg --> msg_type, time,seq , drone_id , frame_id ,status_publisher_time , processing_time
+            status_msg = "{},{},{},{},{},{:.1f},{:.1f}".format("status", msg.header.stamp, msg.header.seq, msg.drone_id, msg.header.frame_id, self.msg_publisher_time,self.processing_time)
+            # Save status message to file
+            self.status_log_file.write(status_msg + "\n")
+            self.status_log_file.flush()
 
             self.advance_index()
             self.rate.sleep()
@@ -149,7 +171,18 @@ class PublisherDroneMachine:
                     self.drone_id, msg.position.x, msg.position.y, msg.position.z, msg.action))     
             self.position = msg.position
             self.action = msg.action
+            # test result information for waypoint msg --> msg_type, time, seq, drone_id, frame_id, waypoint_position, action , waypoint_transmission_time
+            pos_str = "({:.1f},{:.1f},{:.1f})".format(msg.position.x,msg.position.y,msg.position.z)
+            waypoint_msg = "{},{},{},{},{},{},{},{:.1f}".format("waypoint",msg.header.stamp , msg.header.seq , msg.drone_id , msg.header.frame_id ,pos_str, msg.action, self.waypoint_tx_delay )
+            # Save waypoint message to file
+            self.waypoint_log_file.write(waypoint_msg + "\n")
+            self.waypoint_log_file.flush()
 
+    def __del__(self):
+        if hasattr(self, 'status_log_file'):
+            self.status_log_file.close()
+        if hasattr(self, 'waypoint_log_file'):
+            self.waypoint_log_file.close()
 
 if __name__ == '__main__':
     try:

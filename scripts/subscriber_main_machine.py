@@ -1,6 +1,10 @@
 #!/usr/bin/env python
+# test result information for status msg --> msg_type, time,seq , drone_id , frame_id , position, num_detections  ,status_transmission_delay, processing_time
+# test result information for waypoint msg --> msg_type, time, seq, drone_id, frame_id, waypoint_publisher_time
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
+from datetime import datetime
+import os
 import rospy
 import time
 import random
@@ -13,6 +17,18 @@ from ultralytics import YOLO
 class SubscriberMainMachine:
     def __init__(self):
         rospy.init_node('subscriber_main_machine', anonymous=True)
+        
+
+        # Create log directory
+        log_dir = os.path.expanduser("~/logs/subscriber_main_machine")
+        os.makedirs(log_dir, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        self.status_log_path = os.path.join(log_dir, f"status_log_{timestamp}.txt")
+        self.waypoint_log_path = os.path.join(log_dir, f"waypoint_log_{timestamp}.txt")
+
+        self.status_log_file = open(self.status_log_path, 'a')
+        self.waypoint_log_file = open(self.waypoint_log_path, 'a')
 
         #Time attributes
         self.processing_time = None
@@ -86,6 +102,14 @@ class SubscriberMainMachine:
         # end processing timer
         proc_end = time.time()
         self.processing_time = (proc_end - proc_start) * 1000
+
+        # test result information for status msg --> msg_type, time,seq , drone_id , frame_id , position, num_detections  ,status_transmission_delay, processing_time
+        pos_str = "({:.1f},{:.1f},{:.1f})".format(msg.position.x,msg.position.y,msg.position.z)
+        status_msg = "{},{},{},{},{},{},{},{:.1f},{:.1f}".format("status", msg.header.stamp, msg.header.seq, msg.drone_id, msg.header.frame_id, pos_str, number_detections,self.tx_delay,self.processing_time)
+        # Save status message to file
+        self.status_log_file.write(status_msg + "\n")
+        self.status_log_file.flush()
+
         rospy.loginfo(" Processing time: {:.1f} ms; Transmission delay: {:.1f} ms".format(self.processing_time,self.tx_delay))
 
 
@@ -112,18 +136,22 @@ class SubscriberMainMachine:
 
         waypoint_publisher_time_end = time.time()
         self.waypoint_publisher_time = (waypoint_publisher_time_end - waypoint_publisher_time_start) * 1000
-        
+
+        # test result information for waypoint msg --> msg_type, time, seq, drone_id, frame_id, waypoint_publisher_time
+        waypoint_msg = "{},{},{},{},{},{:.1f}".format("waypoint",wp_msg.header.stamp , wp_msg.header.seq , wp_msg.drone_id , wp_msg.header.frame_id , self.waypoint_publisher_time )
+        # Save waypoint message to file
+        self.waypoint_log_file.write(waypoint_msg + "\n")
+        self.waypoint_log_file.flush()
         rospy.loginfo("Published WayPoint for drone %d with label: %s", wp_msg.drone_id, wp_msg.action)
-
-        
-
-        
-
-
-
 
     def spin(self):
         rospy.spin()
+    
+    def __del__(self):
+        if hasattr(self, 'status_log_file'):
+            self.status_log_file.close()
+        if hasattr(self, 'waypoint_log_file'):
+            self.waypoint_log_file.close()
 
 if __name__ == '__main__':
     try:

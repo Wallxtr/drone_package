@@ -1,6 +1,10 @@
 #!/usr/bin/env python
+# test result information for status msg --> msg_type, time,seq , drone_id , frame_id ,status_publisher_time
+# test result information for waypoint msg --> msg_type, time, seq, drone_id, frame_id, waypoint_position, action , waypoint_transmission_time
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
+from datetime import datetime
+import os
 import rospy
 import random
 import cv2
@@ -17,6 +21,17 @@ class PublisherMainMachine:
 
         # fixed node name so that /publisher_idx is shared
         rospy.init_node('publisher_main_machine', anonymous=True)
+
+        # Create log directory
+        log_dir = os.path.expanduser("~/logs/publisher_main_machine")
+        os.makedirs(log_dir, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        self.status_log_path = os.path.join(log_dir, f"status_log_{timestamp}.txt")
+        self.waypoint_log_path = os.path.join(log_dir, f"waypoint_log_{timestamp}.txt")
+
+        self.status_log_file = open(self.status_log_path, 'a')
+        self.waypoint_log_file = open(self.waypoint_log_path, 'a')
 
         #Time attributes
         self.msg_publisher_time = None
@@ -94,15 +109,15 @@ class PublisherMainMachine:
             img_msg.header.frame_id = str(self.image_idx)
 
             # build DroneStatus
-            status = DroneStatusMainMachine(
-                header=img_msg.header,  # header msg
-                drone_id=self.drone_id,  # drone index
-                position=self.position, # drone position
-                image=img_msg   # image 
-            )
+            msg = DroneStatusMainMachine()
+            msg.header = img_msg.header
+            msg.drone_id = self.drone_id
+            msg.position = self.position
+            msg.image = img_msg
+            
 
             # publish and measure rate
-            self.pub.publish(status)
+            self.pub.publish(msg)
             msg_publisher_time_end = time.time()
             self.msg_publisher_time = (msg_publisher_time_end- msg_publisher_time_start) * 1000
             
@@ -112,6 +127,12 @@ class PublisherMainMachine:
                 fps = 1.0 / interval if interval > 0 else float('inf')
                 rospy.loginfo("[{}] Video rate: {:.2f} fps".format(self.drone_id,fps))
             self.prev_pub_time = now
+
+            # test result information for status msg --> msg_type, time,seq , drone_id , frame_id ,status_publisher_time
+            status_msg = "{},{},{},{},{},{:.1f}".format("status", msg.header.stamp, msg.header.seq, msg.drone_id, msg.header.frame_id, self.msg_publisher_time)
+            # Save status message to file
+            self.status_log_file.write(status_msg + "\n")
+            self.status_log_file.flush()
 
             self.advance_index()  # overpass files for loop  !! IMPORTANT FOR LOOP
             self.rate.sleep()
@@ -127,7 +148,18 @@ class PublisherMainMachine:
                     self.drone_id, msg.position.x, msg.position.y, msg.position.z, msg.action))
             self.position = msg.position
             self.action = msg.action
-            
+            # test result information for waypoint msg --> msg_type, time, seq, drone_id, frame_id, waypoint_position, action , waypoint_transmission_time
+            pos_str = "({:.1f},{:.1f},{:.1f})".format(msg.position.x,msg.position.y,msg.position.z)
+            waypoint_msg = "{},{},{},{},{},{},{},{:.1f}".format("waypoint",msg.header.stamp , msg.header.seq , msg.drone_id , msg.header.frame_id ,pos_str, msg.action, self.waypoint_tx_delay )
+            # Save waypoint message to file
+            self.waypoint_log_file.write(waypoint_msg + "\n")
+            self.waypoint_log_file.flush()
+
+    def __del__(self):
+        if hasattr(self, 'status_log_file'):
+            self.status_log_file.close()
+        if hasattr(self, 'waypoint_log_file'):
+            self.waypoint_log_file.close()
 
 if __name__ == '__main__':
     try:
