@@ -14,6 +14,11 @@ class SubscriberMainMachine:
     def __init__(self):
         rospy.init_node('subscriber_main_machine', anonymous=True)
 
+        #Time attributes
+        self.processing_time = None
+        self.waypoint_publisher_time = None
+        self.tx_delay = None
+
 
         # YOLO model params
         self.model_name = rospy.get_param('~model_name', 'yolov8n.pt')
@@ -48,31 +53,20 @@ class SubscriberMainMachine:
         # capture arrival time
         recv_time = time.time()
         # transmission delay (ms)
-        tx_delay = (recv_time - msg.header.stamp.to_sec()) * 1000
-        # video rate (fps)
-        """
-        
-        if topic in self.last_arrival:
-            dt = recv_time - self.last_arrival[topic]
-            fps = 1.0 / dt if dt > 0 else float('inf')
-            rospy.loginfo("[{}] Video rate: {:.2f} fps".format(topic,fps))
-        self.last_arrival[topic] = recv_time
-        """
+        self.tx_delay = (recv_time - msg.header.stamp.to_sec()) * 1000
+
+
         # start processing timer
         proc_start = time.time()
-
         # 1) log header, drone_id, position
         hdr = msg.header
         pos = msg.position
-        
-
         # 2) convert ROS Image to CV2
         try:
             img = self.bridge.imgmsg_to_cv2(msg.image, desired_encoding='bgr8')
         except Exception as e:
             rospy.logerr(" CV convert error: {}".format(e))
             return
-
         # 3) run YOLO
         try:
             results = self.model(img[:, :, ::-1],verbose=False)
@@ -80,7 +74,6 @@ class SubscriberMainMachine:
             number_detections = len(df)
         except Exception as e:
             rospy.logerr(" Detection error: {}".format(e))
-        
         rospy.loginfo(
             " seq=%d stamp=%.3f frame_id=%s | drone_id=%d | pos=(%.2f, %.2f, %.2f) | detection=%d",
             hdr.seq,
@@ -90,8 +83,15 @@ class SubscriberMainMachine:
             pos.x, pos.y, pos.z,
             number_detections
         )
+        # end processing timer
+        proc_end = time.time()
+        self.processing_time = (proc_end - proc_start) * 1000
+        rospy.loginfo(" Processing time: {:.1f} ms; Transmission delay: {:.1f} ms".format(self.processing_time,self.tx_delay))
 
+
+        
         # Publish WayPoint.msg
+        waypoint_publisher_time_start = time.time()
         wp_msg = WayPoint()
         wp_msg.header.stamp = rospy.Time.now()
         wp_msg.header.frame_id = msg.header.frame_id
@@ -107,16 +107,17 @@ class SubscriberMainMachine:
         else:
             wp_msg.action = "go"
             wp_msg.position = Point(x=random.uniform(-10,10),y=random.uniform(-10,10),z=random.uniform(0,5))
-
-
-        rospy.loginfo("Published WayPoint for drone %d with label: %s", wp_msg.drone_id, wp_msg.action)
-
         self.pub.publish(wp_msg)
 
-        # end processing timer
-        proc_end = time.time()
-        processing_time = (proc_end - proc_start) * 1000
-        rospy.loginfo(" Processing time: {:.1f} ms; Transmission delay: {:.1f} ms".format(processing_time,tx_delay))
+
+        waypoint_publisher_time_end = time.time()
+        self.waypoint_publisher_time = (waypoint_publisher_time_end - waypoint_publisher_time_start) * 1000
+        
+        rospy.loginfo("Published WayPoint for drone %d with label: %s", wp_msg.drone_id, wp_msg.action)
+
+        
+
+        
 
 
 

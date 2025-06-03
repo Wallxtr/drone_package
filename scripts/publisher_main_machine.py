@@ -18,6 +18,10 @@ class PublisherMainMachine:
         # fixed node name so that /publisher_idx is shared
         rospy.init_node('publisher_main_machine', anonymous=True)
 
+        #Time attributes
+        self.msg_publisher_time = None
+        self.waypoint_tx_delay= None
+
         # Drone Features
         self.drone_id = self.allocate_drone_id()
         self.position = Point(x=random.uniform(-10,10),y=random.uniform(-10,10),z=random.uniform(0,5))
@@ -78,10 +82,10 @@ class PublisherMainMachine:
 
     def start(self):
         while not rospy.is_shutdown():
-
+            msg_publisher_time_start = time.time()
             path = os.path.join(self.image_dir, self.image_files[self.image_idx])
             img = self.load_image(path)
-            self.advance_index()  # overpass files for loop  !! IMPORTANT FOR LOOP
+            
 
 
             # build Image msg
@@ -99,15 +103,24 @@ class PublisherMainMachine:
 
             # publish and measure rate
             self.pub.publish(status)
+            msg_publisher_time_end = time.time()
+            self.msg_publisher_time = (msg_publisher_time_end- msg_publisher_time_start) * 1000
+            
             now = time.time()
             if self.prev_pub_time is not None:
                 interval = now - self.prev_pub_time
                 fps = 1.0 / interval if interval > 0 else float('inf')
                 rospy.loginfo("[{}] Video rate: {:.2f} fps".format(self.drone_id,fps))
             self.prev_pub_time = now
+
+            self.advance_index()  # overpass files for loop  !! IMPORTANT FOR LOOP
             self.rate.sleep()
 
     def waypoint_callback(self, msg):
+        # capture arrival time
+        recv_time = time.time()
+        # transmission delay (ms)
+        self.waypoint_tx_delay = (recv_time - msg.header.stamp.to_sec()) * 1000
         if msg.drone_id == self.drone_id:
             rospy.loginfo(
                 "[{}] Received WayPoint for this drone: (x={:.2f}, y={:.2f}, z={:.2f}) | Action: {}".format(

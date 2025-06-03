@@ -16,6 +16,12 @@ class PublisherDroneMachine:
         # Initialize ROS node
         rospy.init_node('publisher_drone_machine', anonymous=True)
 
+        #Time attributes
+        self.processing_time = None
+        self.msg_publisher_time = None
+        self.waypoint_tx_delay= None
+
+
         # Drone Features
         self.drone_id = self.allocate_drone_id()
         self.position = Point(x=random.uniform(-10,10),y=random.uniform(-10,10),z=random.uniform(0,5))
@@ -84,6 +90,7 @@ class PublisherDroneMachine:
 
     def start(self):
         while not rospy.is_shutdown():
+            msg_publisher_time_start = time.time()
             start_time = time.time()
             img_path = os.path.join(self.image_dir, self.image_files[self.image_idx])
             img = self.load_image(img_path)
@@ -93,7 +100,9 @@ class PublisherDroneMachine:
                 self.advance_index()
                 self.rate.sleep()
                 continue
+            
 
+            proc_start = time.time()
             try:
                 results = self.model(img[:, :, ::-1])  # BGR -> RGB
             except Exception as e:
@@ -101,6 +110,9 @@ class PublisherDroneMachine:
                 self.advance_index()
                 self.rate.sleep()
                 continue
+            proc_end = time.time()
+            self.processing_time = (proc_end- proc_start)
+
 
             # Build and publish message
             msg = DroneStatusDroneMachine()
@@ -111,14 +123,15 @@ class PublisherDroneMachine:
             msg.detections = len(results[0].boxes)
 
             self.pub.publish(msg)
+
             rospy.loginfo("Published {} detections from {}".format(msg.detections,self.image_files[self.image_idx]))
 
             # Print FPS info
             now = time.time()
             if self.prev_pub_time:
                 fps = 1.0 / (now - self.prev_pub_time) if (now - self.prev_pub_time) > 0 else float('inf')
-                proc_time = (now - start_time) * 1000
-                rospy.loginfo("[drone {}] Publish rate: {:.2f} fps, Processing Time: {:.1f} ms".format(self.drone_id,fps,proc_time))
+                self.msg_publisher_time = ((now - start_time) * 1000 )- self.processing_time  # substract yolo model time
+                rospy.loginfo("[drone {}] Publish rate: {:.2f} fps, Processing Time: {:.1f} ms".format(self.drone_id,fps,self.msg_publisher_time))
             self.prev_pub_time = now
 
             self.advance_index()
@@ -126,6 +139,10 @@ class PublisherDroneMachine:
 
 
     def waypoint_callback(self, msg):
+        # capture arrival time
+        recv_time = time.time()
+        # transmission delay (ms)
+        self.waypoint_tx_delay = (recv_time - msg.header.stamp.to_sec()) * 1000
         if msg.drone_id == self.drone_id:
             rospy.loginfo(
                 "[{}] Received WayPoint for this drone: (x={:.2f}, y={:.2f}, z={:.2f}) | Action: {}".format(
